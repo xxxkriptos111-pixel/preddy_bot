@@ -57,10 +57,10 @@ def get_market_volume_and_price(market_slug):
 print("=== Универсальный БУМАЖНЫЙ бот запущен напрямую в ЕВРОПЕ ===")
 
 REAL_MARKETS = {
-    "BTC": "bitcoin-above-85000-september-24",
-    "ETH": "ethereum-above-26000-september-24",
-    "SOL": "solana-above-14000-september-24",
-    "XRP": "xrp-above-150-september-24"
+    "BTC": "will-bitcoin-hit-100k-in-2026",
+    "ETH": "will-ethereum-hit-4k-in-2026",
+    "SOL": "will-solana-hit-250-in-2026",
+    "XRP": "will-xrp-hit-1-in-2026"
 }
 
 while True:
