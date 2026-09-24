@@ -4,14 +4,9 @@ import requests
 import json
 
 # =====================================================================
-# ВАШ НОВЫЙ ИНДИВИДУАЛЬНЫЙ HTTP ШЛЮЗ С ЭКРАНА PROXY6 (ИСПРАВЛЕННЫЙ)
+# ИНФРАСТРУКТУРНЫЕ НАСТРОЕКИ (ДЛЯ СЕРВЕРА В ЕВРОПЕ ПРОКСИ НЕ НУЖНЫ)
 # =====================================================================
-FULL_PROXY_URL = "http://68.209.61"
-
-PROXIES_CONFIG = {
-    "http": FULL_PROXY_URL,
-    "https": FULL_PROXY_URL
-}
+CLOB_API_URL = "https://polymarket.com"
 
 # МАТРИЦА УТВЕРЖДЕННЫХ НАСТРОЕК СТРАТЕГИЙ ПО МОНЕТАМ
 CONFIG_MATRIX = {
@@ -23,41 +18,44 @@ CONFIG_MATRIX = {
     "NEAR": {"mode": "30/30", "entry_price": 0.30, "trigger_price": 0.30}
 }
 
-TEST_POOL_LIMIT = 5          
-LOT_SIZE_USD = 1.08          
+# МАНI-МЕНЕДЖМЕНТ И РИСК-ФИЛЬТРЫ ИЗ ВАШЕГО ТЗ
+TEST_POOL_LIMIT = 5          # Максимум 5 одновременных событий
+LOT_SIZE_USD = 1.08          # Жесткий лот 1.08 USDT на одну сделку
+
 active_positions = {}
 
 def get_market_volume_and_price(market_slug):
-    """Точный запрос цен из реального шлюза Gamma API через чистый HTTP прокси"""
+    """Прямой высокоскоростной запрос цен из Polymarket Gamma API"""
     try:
-        # ТУТ ВСЁ НА 100% ИСПРАВЛЕНО: Правильный домен, раздел markets и слэш на месте!
-        url = f"https://gamma-api.polymarket.com/{market_slug}"
+        # Ссылка со слэшем и правильным техническим доменом из документации
+        url = f"{CLOB_API_URL}/markets/{market_slug}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
         
-        response = requests.get(url, headers=headers, proxies=PROXIES_CONFIG, timeout=10, verify=False).json()
+        response = requests.get(url, headers=headers, timeout=10).json()
         
-        # Безопасно вытаскиваем массив цен исходов (первый элемент — ДА, второй — НЕТ)
+        # Безопасно вытаскиваем массив актуальных цен в центах
         if "outcomePrices" in response:
             prices_list = response["outcomePrices"]
             
-            yes_price = float(prices_list)
-            no_price = float(prices_list)
+            yes_price = float(prices_list[0])  # Акция ДА
+            no_price = float(prices_list[1])   # Акция НЕТ
             return yes_price, no_price, True
         else:
             return None, None, False
             
     except Exception as e:
-        print(f"[ЖИВОЙ РАДАР ОШИБКА] Сбой парсинга цен: {e}")
+        print(f"[ЖИВОЙ РАДАР СБОЙ] Ошибка получения данных: {e}")
         return None, None, False
 
 def execute_blockchain_order(market_slug, outcome, amount):
+    """Бумажная симуляция отправки ордера в сеть Polygon"""
     print(f"🔥  [БЛОКЧЕЙН] Симуляция ордера: {outcome.upper()} на сумму {amount}$")
     return True
 
-print("=== Универсальный БУМАЖНЫЙ бот запущен через МОНОЛИТНЫЙ HTTP ПРОКСИ ===")
+print("=== Универсальный БУМАЖНЫЙ бот запущен напрямую в ЕВРОПЕ ===")
 print(f"Режим: Тест без денег. Мониторинг живых стаканов. Лимит: {TEST_POOL_LIMIT} рынков.")
 
 # Список активных живых контрактов Polymarket на сегодня
@@ -79,9 +77,10 @@ while True:
         if yes_p and no_p:
             print(f"[ЖИВОЙ РАДАР] {ticker} | Цена ДА: {yes_p}$ | Цена НЕТ: {no_p}$")
             
+            # Логика дельта-нейтральной стратегии 30/30
             if settings["mode"] == "30/30" and market_id not in active_positions:
                 if yes_p <= settings["entry_price"] and vol_fade:
-                    print(f"\n⚡ [СИГНАЛ 30/30] {ticker} коснулся реального дна! Цена: {yes_p}$")
+                    print(f"\n⚡ [СИГНАЛ 30/30] {ticker} коснулся дна! Цена: {yes_p}$")
                     if execute_blockchain_order(market_id, "yes", LOT_SIZE_USD):
                         active_positions[market_id] = {"stage": "FIRST_LEG_BOUGHT", "entry": yes_p}
             
@@ -90,6 +89,6 @@ while True:
                     print(f"\n🔒 [ЗАМОК] Вторая нога по {ticker} упала до {no_p}$. Хеджируем прибыль!")
                     if execute_blockchain_order(market_id, "no", LOT_SIZE_USD):
                         active_positions[market_id]["stage"] = "LOCKED_PROFIT"
-                        print(f"[УСПЕХ] +66.6% успешно заперты in симуляторе.\n")
+                        print(f"[УСПЕХ] +66.6% успешно заперты в симуляторе.\n")
 
-    time.sleep(5)
+    time.sleep(5)  # Интервал опроса стаканов
