@@ -39,19 +39,32 @@ TEST_POOL_LIMIT = 5
 LOT_SIZE_USD = 1.08          
 active_positions = {}
 
-def get_market_volume_and_price(market_slug):
+ef get_market_volume_and_price(market_slug):
     try:
         url = f"{CLOB_API_URL}/markets/{market_slug}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, headers=headers, timeout=10).json()
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         
+        response = requests.get(url, headers=headers, timeout=10, verify=False).json()
+        
+        # Если API вернуло ошибку или рынок не найден
+        if "error" in response or "detail" in response:
+            print(f"[РАДАР ПРЕДУПРЕЖДЕНИЕ] API вернуло ошибку для {market_slug}: {response}")
+            return None, None, False
+            
         if "outcomePrices" in response:
-            prices_list = response["outcomePrices"]
-            yes_price = float(prices_list)
-            no_price = float(prices_list)
+            prices_list = response["outcomePrices"]  # Получаем массив строк типа ["0.52", "0.48"]
+            
+            # Извлекаем первый элемент как цену ДА, второй — как цену НЕТ
+            yes_price = float(prices_list[0]) if len(prices_list) > 0 else 0.5
+            no_price = float(prices_list[1]) if len(prices_list) > 1 else 0.5
             return yes_price, no_price, True
-        return None, None, False
-    except Exception:
+        else:
+            print(f"[РАДАР ПРЕДУПРЕЖДЕНИЕ] В ответе API нет поля outcomePrices для {market_slug}")
+            return None, None, False
+            
+    except Exception as e:
+        # Теперь бот обязан громко доложить в консоль, если что-то пойдет не так
+        print(f"[ЖИВОЙ РАДАР КРИТ] Внутренний сбой парсинга для {market_slug}: {e}")
         return None, None, False
 
 print("=== Универсальный БУМАЖНЫЙ бот запущен напрямую в ЕВРОПЕ ===")
