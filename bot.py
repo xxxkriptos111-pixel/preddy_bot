@@ -102,7 +102,7 @@ while True:
             print(f"[ЖИВОЙ РАДАР] {ticker} | Цена ДА: {yes_p}$ | Цена НЕТ: {no_p}$ | Прошло раунда: {round(passed_pct, 1)}% | Баланс: {round(current_balance, 2)} USDT | Текущий лот: {dynamic_lot_size}$")
             
             if settings["mode"] == "30/30" and market_id not in active_positions:
-                    if passed_pct >= 65.0:
+                if passed_pct >= 65.0:
                     continue
                     
                 if yes_p <= settings["entry_price"] and vol_fade:
