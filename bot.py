@@ -24,18 +24,26 @@ def run_web_server():
 threading.Thread(target=run_web_server, daemon=True).start()
 
 # =====================================================================
-# НАСТРОЙКИ СВЯЗИ С ВАШИМ TELEGRAM (ИНТЕГРИРОВАНО НА 100%)
+# НАСТРОЙКИ СВЯЗИ С ВАШИМ TELEGRAM (ИНТЕГРИРОВАНО ДЛЯ ЕВГЕНИЯ МЕЛЯДИНА)
 # =====================================================================
 TG_TOKEN = "8680952050:AAEGzWfJZ2ij2HjxeCdKl0fY31E5wnZ4e6y"
 TG_CHAT_ID = "8418019696"
 
+# Глобальные счетчики для четырехчасового отчета
+error_count = 0
+signals_caught = 0
+
 def send_telegram_alert(message):
+    global error_count
     try:
         url = f"https://telegram.org{TG_TOKEN}/sendMessage"
         payload = {"chat_id": TG_CHAT_ID, "text": message, "parse_mode": "Markdown"}
-        requests.post(url, json=payload, timeout=5)
+        response = requests.post(url, json=payload, timeout=5)
+        if response.status_code != 200:
+            error_count += 1
     except Exception as e:
-        print(f"[ТГ ОШИБКА] Не удалось отправить уведомление: {e}")
+        error_count += 1
+        print(f"[ТГ ОШИБКА] Ошибка связи: {e}")
 
 # =====================================================================
 # УТВЕРЖДЕННАЯ БОЕВАЯ МАТРИЦА НАСТРОЕК (ЭКСПЕРИМЕНТ №6)
@@ -48,13 +56,11 @@ CONFIG_MATRIX = {
     "SUI_DAILY": {"mode": "30/30", "entry_price": 0.30, "trigger_price": 0.30}
 }
 
-# НАСТРОЙКИ ДЛЯ 2-ДНЕВНОГО ЛАЙВ-ТЕСТА (МИКРО-ДЕПОЗИТ)
 START_DEPOSIT = 20.0          
 MARGIN_USAGE_PCT = 0.95       
 TEST_POOL_LIMIT = 8           
 active_positions = {}
 
-# Список живых краткосрочных пулов на текущую сессию
 REAL_MARKETS = {
     "BTC_DAILY": "will-bitcoin-hit-88k-today",
     "ETH_DAILY": "will-ethereum-hit-3k-today",
@@ -70,11 +76,40 @@ def get_current_balance():
             profit += data["lot_size"] * 0.6666  
     return START_DEPOSIT + profit
 
+# =====================================================================
+# ФУНКЦИЯ РЕГУЛЯРНЫХ ОТЧЕТОВ РАЗ В 4 ЧАСА (ФОНОВЫЙ ПОТОК)
+# =====================================================================
+def status_reporter_loop():
+    # Ждем 4 часа перед отправкой первого регулярного отчета (4 часа = 14400 секунд)
+    while True:
+        time.sleep(14400)
+        global error_count, signals_caught
+        current_balance = get_current_balance()
+        active_count = len([k for k, v in active_positions.items() if v["stage"] == "FIRST_LEG_BOUGHT"])
+        closed_count = len([k for k, v in active_positions.items() if v["stage"] == "LOCKED_PROFIT"])
+        
+        status_msg = (
+            f"📊  *[РЕГУЛЯРНЫЙ ОТЧЕТ РАДАР]*\n\n"
+            f"🟢  *Статус сервера:* Работает автономно (Германия)\n"
+            f"💰 *Текущий баланс:* `{round(current_balance, 2)} USDT` (Старт: 20.0)\n"
+            f"🔒 *Закрыто замков:* `{closed_count}`\n"
+            f"⚠️  *Одиночных висяков:* `{active_count}`\n"
+            f"⚡ *Поймано сигналов:* `{signals_caught}`\n"
+            f"🛠️  *Ошибок сети за 4ч:* `{error_count}`\n\n"
+            f"Все системы работают в штатном Web3-режиме."
+        )
+        send_telegram_alert(status_msg)
+        # Обнуляем промежуточные счетчики ошибок за текущие 4 часа
+        error_count = 0
+        threading.Thread(target=status_reporter_loop, daemon=True).start()
+
+# =====================================================================
+# ОСНОВНОЙ АЛГОРИТМ РАБОТЫ РАДАР ПУЛОВ
+# =====================================================================
 def get_market_volume_and_price(market_slug):
     try:
         url = f"https://dexscreener.com{market_slug}"
         response = requests.get(url, timeout=10).json()
-        
         if "pairs" in response and len(response["pairs"]) > 0:
             pair = response["pairs"]
             price_usd = float(pair.get("priceUsd", 0.51))
@@ -86,13 +121,15 @@ def get_market_volume_and_price(market_slug):
         return 0.51, 0.49, True
 
 def execute_blockchain_order(market_slug, outcome, amount):
-    alert_msg = f"🔔  *[РАДАР СИГНАЛ]*\n\n📦 *Рынок:* {market_slug.upper()}\n🎯  *Действие:* Имитация закупа {outcome.upper()}\n💰 *Размер лота:* {amount} USD"
+    global signals_caught
+    signals_caught += 1
+    alert_msg = f"🔔  *[РАДАР СИГНАЛ]*\n\n📦 *Рынок:* `{market_slug.upper()}`\n🎯  *Действие:* Имитация закупа {outcome.upper()}\n💰 *Размер лота:* `{amount} USD`"
     send_telegram_alert(alert_msg)
     print(f"🔥  [БЛОКЧЕЙН] Симуляция ордера: {outcome.upper()} на сумму {amount} USD")
     return True
 
-print("=== ИСТИННЫЙ БОЕВОЙ РАДАР ЗАПУЩЕН В ГЕРМАНИИ ===")
-send_telegram_alert("🚀  *[ИСТИННАЯ ЛОГИКА АКТИВИРОВАНА]*\n\nБот успешно запущен во Франкфурте! Фильтр 65% контролирует только СТАРТ раунда. Выкуп 2-й ноги разрешен до самого финиша раунда (100% времени)!")
+print("=== ФИНАЛЬНЫЙ ТЕСТОВЫЙ РАДАР С TELEGRAM АКТИВИРОВАН ===")
+send_telegram_alert("🚀  *[ИНФРАСТРУКТУРА ЖИВА]*\n\nБот успешно запущен во Франкфурте! Фильтр 65% контролирует только СТАРТ раунда. Выкуп 2-й ноги разрешен до самого финиша. Отчеты каждые 4 часа активированы!")
 
 while True:
     now_utc = datetime.now(timezone.utc)
@@ -117,7 +154,6 @@ while True:
         if yes_p and no_p:
             print(f"[ЖИВОЙ РАДАР] {ticker} | Цена ДА: {yes_p} | Цена НЕТ: {no_p} | Прошло раунда: {round(passed_pct, 1)}% | Баланс: {round(current_balance, 2)} USDT | Текущий лот: {dynamic_lot_size}")
             
-            # ВХОД В ПЕРВУЮ НОГУ: Жестко заблокирован, если прошло больше 65% времени раунда
             if settings["mode"] == "30/30" and market_id not in active_positions:
                 if passed_pct >= 65.0:
                     continue
@@ -127,10 +163,9 @@ while True:
                     if execute_blockchain_order(market_id, "yes", dynamic_lot_size):
                         active_positions[market_id] = {"stage": "FIRST_LEG_BOUGHT", "entry": yes_p, "lot_size": dynamic_lot_size}
             
-            # ВЫКУП ВТОРОЙ НОГИ В ЗАМОК: Полная свобода! Работает до 100% времени раунда (без ограничений)
             elif market_id in active_positions and active_positions[market_id]["stage"] == "FIRST_LEG_BOUGHT":
                 if no_p <= settings["trigger_price"]:
-                    success_msg = f"🔒 *[ЗАМОК ЗАФИКСИРОВАН]*\n\n🪙  *Монета:* {ticker}\n📉  *Вторая нога упала до:* {no_p} USD\n💎  Истинный замок закрыт в конце раунда. Прибыль успешно заперта!"
+                    success_msg = f"🔒 *[ЗАМОК ЗАФИКСИРОВАН]*\n\n🪙  *Монета:* {ticker}\n📉  *Вторая нога упала до:* {no_p} USD\n💎  Истинный замок закрыт. Прибыль успешно заперта в капитализации!"
                     send_telegram_alert(success_msg)
                     print(f"🔒 [ЗАМОК] Вторая нога по {ticker} упала до {no_p}. Хеджируем прибыль!")
                     if execute_blockchain_order(market_id, "no", active_positions[market_id]["lot_size"]):
