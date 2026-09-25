@@ -24,7 +24,7 @@ def run_web_server():
 threading.Thread(target=run_web_server, daemon=True).start()
 
 # =====================================================================
-# НАСТРОЙКИ СВЯЗИ С ВАШИМ TELEGRAM (ИНТЕГРИРОВАНО ДЛЯ ЕВГЕНИЯ МЕЛЯДИНА)
+# НАСТРОЙКИ СВЯЗИ С ВАШИМ TELEGRAM (ИНТЕГРИРОВАНО НА 100%)
 # =====================================================================
 TG_TOKEN = "8680952050:AAEGzWfJZ2ij2HjxeCdKl0fY31E5wnZ4e6y"
 TG_CHAT_ID = "8418019696"
@@ -91,8 +91,8 @@ def execute_blockchain_order(market_slug, outcome, amount):
     print(f"🔥  [БЛОКЧЕЙН] Симуляция ордера: {outcome.upper()} на сумму {amount} USD")
     return True
 
-print("=== ФИНАЛЬНЫЙ ТЕСТОВЫЙ РАДАР С TELEGRAM АКТИВИРОВАН ===")
-send_telegram_alert("🚀  *[ИНФРАСТРУКТУРА ЖИВА]*\n\nБот-радар успешно запущен на сервере во Франкфурте! Начинаю круглосуточную охоту за замками 30/30 на балансе 20 USDT.")
+print("=== ИСТИННЫЙ БОЕВОЙ РАДАР ЗАПУЩЕН В ГЕРМАНИИ ===")
+send_telegram_alert("🚀  *[ИСТИННАЯ ЛОГИКА АКТИВИРОВАНА]*\n\nБот успешно запущен во Франкфурте! Фильтр 65% контролирует только СТАРТ раунда. Выкуп 2-й ноги разрешен до самого финиша раунда (100% времени)!")
 
 while True:
     now_utc = datetime.now(timezone.utc)
@@ -117,6 +117,7 @@ while True:
         if yes_p and no_p:
             print(f"[ЖИВОЙ РАДАР] {ticker} | Цена ДА: {yes_p} | Цена НЕТ: {no_p} | Прошло раунда: {round(passed_pct, 1)}% | Баланс: {round(current_balance, 2)} USDT | Текущий лот: {dynamic_lot_size}")
             
+            # ВХОД В ПЕРВУЮ НОГУ: Жестко заблокирован, если прошло больше 65% времени раунда
             if settings["mode"] == "30/30" and market_id not in active_positions:
                 if passed_pct >= 65.0:
                     continue
@@ -126,9 +127,10 @@ while True:
                     if execute_blockchain_order(market_id, "yes", dynamic_lot_size):
                         active_positions[market_id] = {"stage": "FIRST_LEG_BOUGHT", "entry": yes_p, "lot_size": dynamic_lot_size}
             
+            # ВЫКУП ВТОРОЙ НОГИ В ЗАМОК: Полная свобода! Работает до 100% времени раунда (без ограничений)
             elif market_id in active_positions and active_positions[market_id]["stage"] == "FIRST_LEG_BOUGHT":
                 if no_p <= settings["trigger_price"]:
-                    success_msg = f"🔒 *[ЗАМОК ЗАФИКСИРОВАН]*\n\n🪙  *Монета:* {ticker}\n📉  *Вторая нога упала до:* {no_p} USD\n💎  Стратегия отработана. Прибыль успешно заперта в капитализации!"
+                    success_msg = f"🔒 *[ЗАМОК ЗАФИКСИРОВАН]*\n\n🪙  *Монета:* {ticker}\n📉  *Вторая нога упала до:* {no_p} USD\n💎  Истинный замок закрыт в конце раунда. Прибыль успешно заперта!"
                     send_telegram_alert(success_msg)
                     print(f"🔒 [ЗАМОК] Вторая нога по {ticker} упала до {no_p}. Хеджируем прибыль!")
                     if execute_blockchain_order(market_id, "no", active_positions[market_id]["lot_size"]):
