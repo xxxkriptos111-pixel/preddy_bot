@@ -27,10 +27,10 @@ threading.Thread(target=run_web_server, daemon=True).start()
 # =====================================================================
 # Текущая цена рынка ~0.51$. Мы ставим триггер 0.53$, чтобы бот сразу зашел в сделку!
 CONFIG_MATRIX = {
-    "BTC":  {"mode": "30/30", "entry_price": 0.53, "trigger_price": 0.53},
-    "ETH":  {"mode": "30/30", "entry_price": 0.53, "trigger_price": 0.53},
-    "SOL":  {"mode": "30/30", "entry_price": 0.53, "trigger_price": 0.53},
-    "XRP":  {"mode": "30/30", "entry_price": 0.53, "trigger_price": 0.53}
+    "BTC_DAILY":  {"mode": "30/30", "entry_price": 0.35, "trigger_price": 0.35},
+    "ETH_DAILY":  {"mode": "30/30", "entry_price": 0.35, "trigger_price": 0.35},
+    "CRYPTO_VOL": {"mode": "30/30", "entry_price": 0.35, "trigger_price": 0.35},
+    "GAS_PRICE":  {"mode": "30/30", "entry_price": 0.35, "trigger_price": 0.35}
 }
 
 TEST_POOL_LIMIT = 5          
@@ -40,13 +40,13 @@ active_positions = {}
 # =====================================================================
 # СБОР ДАННЫХ ИЗ БЛОКЧЕЙНА POLYGON
 # =====================================================================
+# Высокоактивные краткосрочные рынки для генерации 36+ сделок в неделю
 REAL_MARKETS = {
-    "BTC": "will-bitcoin-hit-100k-in-2026",
-    "ETH": "will-ethereum-hit-4k-in-2026",
-    "SOL": "will-solana-hit-250-in-2026",
-         "XRP": "will-xrp-hit-1-in-2026"
+    "BTC_DAILY": "will-bitcoin-hit-88k-today",
+    "ETH_DAILY": "will-ethereum-hit-3k-today",
+    "CRYPTO_VOL": "crypto-volatility-index-above-50",
+    "GAS_PRICE": "polygon-gas-price-above-100"
 }
-
 def get_market_volume_and_price(market_slug):
     try:
         url = f"https://dexscreener.com{market_slug}"
