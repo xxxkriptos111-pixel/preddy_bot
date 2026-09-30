@@ -21,8 +21,9 @@ TG_TOKEN = "8624858759:AAFp59zrzxoLWFy9g_qm05KErycnjXKHlUU"
 TG_CHAT_ID = "@kriptos111"
 
 def send_telegram_alert(message):
-    """НЕУБИВАЕМЫЙ ДИСПЕТЧЕР: Запись в log.txt и отправка в Telegram через Proxifier"""
+    """БРОНИРОВАННЫЙ АВТОНОМНЫЙ ШЛЮЗ: Запись на диск + изоляция лагов сети"""
     try:
+        # ШАГ 1: Мгновенная, железобетонная запись на жесткий диск ПК
         clean_text = message.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "")
         clean_text = clean_text.replace("**", "").replace("`", "")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -30,13 +31,20 @@ def send_telegram_alert(message):
         with open("log.txt", "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {clean_text}\n")
             f.write("="*50 + "\n")
+        print("💾  [САМОПИСЕЦ]: Данные кошелька успешно заперты в файл log.txt!")
         
-        # ЖЕСТКИЙ ФИКС: Ссылка собрана в монолит со слэшами, без ошибок парсинга!
-        url = "https://telegram.org"
-        payload = {"chat_id": TG_CHAT_ID, "text": message, "parse_mode": "HTML"}
-        requests.post(url, json=payload, timeout=5)
+        # ШАГ 2: Безопасный выстрел в Telegram через Proxifier с жестким лимитом в 1 секунду!
+        # Если прокси зависнет — бот просто проигнорирует лаг и пойдет дальше качатьBybit!
+        try:
+            url = "https://telegram.org"
+            payload = {"chat_id": TG_CHAT_ID, "text": message, "parse_mode": "HTML"}
+            requests.post(url, json=payload, timeout=1.0) # Жесткий тайм-аут 1 секунда!
+        except:
+            print("🚨  [СЕТЕВОЙ ЛАГ TELEGRAM]: Прокси застрял, но сканер Bybit продолжает бой!")
+            
     except Exception as e:
-        print(f"🚨  [СБОЙ СВЯЗИ/САМОПИСЦА]: {e}")
+        print(f"🚨  [КРИТИЧЕСКИЙ СБОЙ САМОПИСЦА]: {e}")
+
 
 BYBIT_API_KEY = "ВСТАВЬТЕ_API_KEY_СУБАККАУНТА"
 BYBIT_SECRET_KEY = "ВСТАВЬТЕ_SECRET_KEY_СУБАККАУНТА"
