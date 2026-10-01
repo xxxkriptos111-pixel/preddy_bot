@@ -117,6 +117,7 @@ while True:
     
     # ПОДВЕДЕНИЕ ИТОГОВ РАУНДА И РЕАНИМАЦИЯ НА 01-Й СЕКУНДЕ НОВОГО ЧАСА
     if current_hour != last_hour_checked:
+        global RESERVE_BANK  # ЖЕСТКИЙ ФИКС: Объявляем кошелек в самом верху блока!
         LOCAL_STRIKES_CACHE.clear()
         last_hour_checked = current_hour
         round_triggered = False
@@ -131,7 +132,6 @@ while True:
                     is_win = (pos["prediction"] == "🟢  ЗЕЛЕНАЯ" and actual_winner == "GREEN") or \
                              (pos["prediction"] == "🔴  КРАСНАЯ" and actual_winner == "RED")
                     
-                    global RESERVE_BANK
                     clone = CLONES_MATRIX[ticker]
                     old_circle = clone["circle"]
                     
