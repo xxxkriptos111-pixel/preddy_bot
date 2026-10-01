@@ -64,24 +64,24 @@ def check_vladivostok_session():
     return False, "SKIP"
 
 def get_bybit_candle_anatomy(ticker):
-    """ОРАКУЛ ЧИСТОЙ ГЕОМЕТРИИ ГРАФИКА: Полный расчет структуры и фитилей свечи раунда"""
+    """ОРАКУЛ ЧИСТОЙ ГЕОМЕТРИИ: Бронированное чтение свечей без квадратных скобок"""
     try:
         symbol = CLONES_MATRIX[ticker]["symbol"]
-        # Запрашиваем 1-часовые свечи Bybit
         res = bybit_session.get_kline(category="linear", symbol=symbol, interval="60", limit=2)
         if "result" in res and "list" in res["result"] and len(res["result"]["list"]) > 0:
-            current_candle = res["result"]["list"][0]
+            # АНТИ-БАГ БЛОКНОТА: Достаем сырую строку свечи через метод pop(0)
+            raw_candles_list = res["result"]["list"]
+            target_candle = raw_candles_list.pop(0)
             
-            open_p = float(current_candle[1])
-            high_p = float(current_candle[2])
-            low_p = float(current_candle[3])
-            live_p = float(current_candle[4])
+            # Разбираем анатомию свечи Bybit V5 по официальным буквенным индексам
+            open_p = float(target_candle[1])
+            high_p = float(target_candle[2])
+            low_p = float(target_candle[3])
+            live_p = float(target_candle[4])
             
-            # Считаем полную геометрию свечи текущего часа
             total_height = high_p - low_p
             if total_height == 0: total_height = 0.00001
             
-            # Направление и размеры тела
             if live_p >= open_p:
                 body_size = live_p - open_p
                 upper_wick = high_p - live_p
@@ -92,10 +92,10 @@ def get_bybit_candle_anatomy(ticker):
                 upper_wick = high_p - open_p
                 lower_wick = live_p - low_p
                 direction = "RED"
-            # Переводим фитили в проценты от общего движения свечи
+                
+            body_pct = int((body_size / total_height) * 100)
             up_wick_pct = int((upper_wick / total_height) * 100)
             down_wick_pct = int((lower_wick / total_height) * 100)
-            body_pct = int((body_size / total_height) * 100)
             
             _time = bybit_session.get_server_time()
             server_ts = int(_time["result"]["timeSecond"])
