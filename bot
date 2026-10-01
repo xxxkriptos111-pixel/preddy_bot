@@ -104,6 +104,9 @@ round_triggered = False
 
 while True:
     try:
+        # Сразу объявляем глобальный сейф на первой секунде цикла
+        global RESERVE_BANK
+        
         _time = bybit_session.get_server_time()
         server_ts = int(_time["result"]["timeSecond"])
         server_dt = datetime.fromtimestamp(server_ts, timezone.utc)
@@ -117,7 +120,86 @@ while True:
     
     # ПОДВЕДЕНИЕ ИТОГОВ РАУНДА И РЕАНИМАЦИЯ НА 01-Й СЕКУНДЕ НОВОГО ЧАСА
     if current_hour != last_hour_checked:
-        global RESERVE_BANK  # ЖЕСТКИЙ ФИКС: Объявляем кошелек в самом верху блока!
+        LOCAL_STRIKES_CACHE.clear()
+        last_hour_checked = current_hour
+        round_triggered = False
+        
+        for ticker in POLYMARKET_TOKENS:
+            if ticker in active_positions:
+                pos = active_positions[ticker]
+                yes_p, no_p, live_p, _, success = get_market_data(ticker)
+                
+                if success:
+                    actual_winner = "GREEN" if yes_p > 50 else "RED"
+                    is_win = (pos["prediction"] == "🟢  ЗЕЛЕНАЯ" and actual_winner == "GREEN") or \
+                             (pos["prediction"] == "🔴  КРАСНАЯ" and actual_winner == "RED")
+                    
+                    clone = CLONES_MATRIX[ticker]
+                    old_circle = clone["circle"]
+                    
+                    if is_win:
+                        verdict = f"🏆 ПОБЕДА КЛОНА {ticker}!"
+                        # КРУГ 1: Выиграл $5 -> получил $10. Переход на Круг 2
+                        if old_circle == 1:
+                            clone["circle"] = 2
+                            clone["last_stake"] = 10.0
+                            clone["status"] = "ACTIVE"
+                        # КРУГ 2 (СЕЙФ-РАУНД): Выиграл $10 -> получил $20. Прячем $10 в сейф!
+                        elif old_circle == 2:
+                            RESERVE_BANK += 10.0  # Запираем две пятёрки!
+                            clone["circle"] = 3
+                            clone["last_stake"] = 10.0
+                            clone["status"] = "ACTIVE"
+                            send_log(f"🔒 [СЕЙФ ОБНОВЛЕН]: Клон {ticker} закрыл Сейф-Раунд! ДВЕ ПЯТЁРКИ ЗАПЕРТЫ В СЕЙФ!")
+                        # КРУГ 3: Выиграл $10 -> получил $20. Переход на Финальный Круг 4
+                        elif old_circle == 3:
+                            clone["circle"] = 4
+                            clone["last_stake"] = 20.0
+                            clone["status"] = "ACTIVE"
+                        # КРУГ 4 (БЕСКОНЕЧНЫЙ БОЙ): Выиграл $20 -> получил $40. Молотит дальше!
+                        elif old_circle == 4:
+                            clone["circle"] = 4
+                            clone["last_stake"] = 20.0
+                            clone["status"] = "ACTIVE"
+                    else:
+                        verdict = f"❌ СЛИВ КЛОНА {ticker}!"
+                        # Любой минус на любом круге полностью обнуляет прогресс до Круга 1
+                        clone["circle"] = 1
+                        clone["last_stake"] = 5.0
+                        clone["status"] = "FROZEN"  # Павший боец ждет маржу из сейфа
+                        
+                    report = (
+                        f"\n🏁  <b>ВЕРДИКТ РАУНДА ДЛЯ {ticker}</b>\n"
+                        f"📊  Бот предсказывал: {pos['prediction']} | Рынок закрылся: {'🟢  ЗЕЛЕНАЯ' if actual_winner == 'GREEN' else '🔴  КРАСНАЯ'}\n"
+                        f"🎯  Исход: {verdict}\n"
+                        f"📈  Был на круге: {old_circle} -> Перешел на круг: {clone['circle']}\n"
+                        f"------------------------------------------------------"
+                    )
+                    send_log(report)
+                    
+        # БЛОК АВТО-РЕАНИМАЦИИ ПАВШИХ ИЗ СЕЙФА
+        for ticker in POLYMARKET_TOKENS:
+            clone = CLONES_MATRIX[ticker]
+            if clone["status"] == "FROZEN":
+                if RESERVE_BANK >= 5.0:
+                   while True:
+    try:
+        # Сразу объявляем глобальный сейф на первой секунде цикла
+        global RESERVE_BANK
+        
+        _time = bybit_session.get_server_time()
+        server_ts = int(_time["result"]["timeSecond"])
+        server_dt = datetime.fromtimestamp(server_ts, timezone.utc)
+        current_min = server_dt.minute
+        current_hour = server_dt.hour
+    except:
+        time.sleep(5)
+        continue
+
+    is_active_session, session_name = check_vladivostok_session()
+    
+    # ПОДВЕДЕНИЕ ИТОГОВ РАУНДА И РЕАНИМАЦИЯ НА 01-Й СЕКУНДЕ НОВОГО ЧАСА
+    if current_hour != last_hour_checked:
         LOCAL_STRIKES_CACHE.clear()
         last_hour_checked = current_hour
         round_triggered = False
@@ -233,4 +315,5 @@ while True:
                     round_triggered = True
                     break # Заходим строго в 1 лучший фитиль часа, чтобы слоты не толкались
 
+    sys.stdout.flush()
     time.sleep(10)
