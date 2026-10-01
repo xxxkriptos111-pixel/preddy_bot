@@ -19,10 +19,10 @@ bybit_session = HTTP(testnet=False)
 TG_TOKEN = "8624858759:AAFp59zrzxoLWFy9g_qm05KErycnjXKHlUU"
 TG_CHAT_ID = "@kriptos111"
 
-# ЖЕСТКИЙ ФИКС СИНТАКСИСА: Системный словарь памяти для защиты от SyntaxError
+# Системный словарь памяти для защиты от NameError
 BANK_VAULT = {"RESERVE_BANK": 0.0}
 
-# Инициализация 4 автономных клонов под каждую монету пула
+# Четыре автономных клона Bybit со своими уровнями (кругами)
 CLONES_MATRIX = {
     "BTC_HOURLY":  {"symbol": "BTCUSDT",  "circle": 1, "status": "ACTIVE", "last_stake": 5.0},
     "SOL_HOURLY":  {"symbol": "SOLUSDT",  "circle": 1, "status": "ACTIVE", "last_stake": 5.0},
@@ -35,18 +35,18 @@ LOCAL_STRIKES_CACHE = {}
 active_positions = {}
 
 def send_log(message):
-    """СНАЙПЕРСКИЙ САМОПИСЕЦ: Логирование в log.txt, консоль и Telegram"""
-    timestamp = datetime.now(timezone(timedelta(hours=10))).strftime("%Y-%m-%d %H:%M:%S")
-    clean_msg = message.replace("<b>", "").replace("</b>", "").replace("🟢 ", "").replace("🔴 ", "")
-    clean_msg = clean_msg.replace("<code>", "").replace("</code>", "")
-    
-    with open("log.txt", "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {clean_msg}\n")
-        f.write("="*60 + "\n")
-        
-    print(f"[{timestamp}] {clean_msg}")
-    
+    """СНАЙПЕРСКИЙ САМОПИСЕЦ: Логирование в лог.txt, консоль и Telegram"""
     try:
+        timestamp = datetime.now(timezone(timedelta(hours=10))).strftime("%Y-%m-%d %H:%M:%S")
+        clean_msg = message.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "")
+        clean_msg = clean_msg.replace("🟢 ", "").replace("🔴 ", "").replace("🏆", "").replace("❌", "").replace("🔒", "")
+        
+        with open("log.txt", "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {clean_msg}\n")
+            f.write("="*60 + "\n")
+            
+        print(f"[{timestamp}] {message}")
+        
         url = f"https://telegram.org{TG_TOKEN}/sendMessage"
         payload = {"chat_id": TG_CHAT_ID, "text": message, "parse_mode": "HTML"}
         requests.post(url, json=payload, timeout=1.0)
@@ -58,54 +58,64 @@ def check_vladivostok_session():
     vlad_time = datetime.now(timezone(timedelta(hours=10)))
     total_min = vlad_time.hour * 60 + vlad_time.minute
     
-    if 600 <= total_min <= 1020: 
-        return True, "🌅  ASIA_FLAT (Тихий боковик)"
-    if (22 * 60 + 30) <= total_min or total_min <= (0 * 60 + 30): 
-        return True, "🇺🇸  РАЗОГРЕВ АМЕРИКИ (Импульс китов)"
-    if 300 <= total_min <= 420: 
-        return True, "🇺🇸  ЗАТИШЬЕ АМЕРИКИ (Финал плит)"
+    if 600 <= total_min <= 1020: return True, "🌅  ASIA_FLAT (Тихий боковик)"
+    if (22 * 60 + 30) <= total_min or total_min <= (0 * 60 + 30): return True, "🇺🇸  РАЗОГРЕВ АМЕРИКИ (Импульс китов)"
+    if 300 <= total_min <= 420: return True, "🇺🇸  ЗАТИШЬЕ АМЕРИКИ (Финал плит)"
     return False, "SKIP"
 
-def get_market_data(ticker):
-    """ОРАКУЛ BYBIT V5: Чистый съем котировок в целых числах 50/50"""
+def get_bybit_candle_anatomy(ticker):
+    """ОРАКУЛ ЧИСТОЙ ГЕОМЕТРИИ ГРАФИКА: Полный расчет структуры и фитилей свечи раунда"""
     try:
         symbol = CLONES_MATRIX[ticker]["symbol"]
-        res = bybit_session.get_tickers(category="linear", symbol=symbol)
+        # Запрашиваем 1-часовые свечи Bybit
+        res = bybit_session.get_kline(category="linear", symbol=symbol, interval="60", limit=2)
         if "result" in res and "list" in res["result"] and len(res["result"]["list"]) > 0:
-            raw_list = res["result"]["list"]
-            first_element = raw_list.pop(0)
-            live_p = float(first_element["lastPrice"])
+            current_candle = res["result"]["list"][0]
+            
+            open_p = float(current_candle[1])
+            high_p = float(current_candle[2])
+            low_p = float(current_candle[3])
+            live_p = float(current_candle[4])
+            
+            # Считаем полную геометрию свечи текущего часа
+            total_height = high_p - low_p
+            if total_height == 0: total_height = 0.00001
+            
+            # Направление и размеры тела
+            if live_p >= open_p:
+                body_size = live_p - open_p
+                upper_wick = high_p - live_p
+                lower_wick = open_p - low_p
+                direction = "GREEN"
+            else:
+                body_size = open_p - live_p
+                upper_wick = high_p - open_p
+                lower_wick = live_p - low_p
+                direction = "RED"
+            # Переводим фитили в проценты от общего движения свечи
+            up_wick_pct = int((upper_wick / total_height) * 100)
+            down_wick_pct = int((lower_wick / total_height) * 100)
+            body_pct = int((body_size / total_height) * 100)
             
             _time = bybit_session.get_server_time()
             server_ts = int(_time["result"]["timeSecond"])
             current_min = datetime.fromtimestamp(server_ts, timezone.utc).minute
             
-            if current_min <= 1 or ticker not in LOCAL_STRIKES_CACHE:
-                LOCAL_STRIKES_CACHE[ticker] = live_p
-                
-            strike = LOCAL_STRIKES_CACHE[ticker]
-            diff = ((live_p - strike) / strike) * 100.0
-            yes_p = round(0.50 + (diff * 7.5), 2)
-            if yes_p < 0.05: yes_p = 0.05
-            if yes_p > 0.95: yes_p = 0.95
-            
-            yes_display = int(yes_p * 100)
-            return yes_display, 100 - yes_display, live_p, current_min, True
-        return 50, 50, 0.0, 0, False
+            return direction, body_pct, up_wick_pct, down_wick_pct, live_p, current_min, True
+        return "NEUTRAL", 0, 0, 0, 0.0, 0, False
     except:
-        return 50, 50, 0.0, 0, False
-
+        return "NEUTRAL", 0, 0, 0, 0.0, 0, False
 # =====================================================================
-# ГЛАВНЫЙ БЕСКОНЕЧНЫЙ ЦИКЛ СКАНЕРА: КАСКАДНЫЙ СЕЙФ-МАРТИНГЕЙЛ
+# ГЛАВНЫЙ БЕСКОНЕЧНЫЙ ЦИКЛ СКАНЕРА: ГЕОМЕТРИЧЕСКИЙ КАСКАД КЛОНОВ
 # =====================================================================
 os.system("cls" if os.name == "nt" else "clear")
-send_log("<b>=== КАСКАДНЫЙ СКАНЕР ЕВГЕНИЯ «4 КЛОНА» АКТИВИРОВАН ===</b>\nРежим: Рентген-тест кругов и Сейфа\nСтартовый пул: 4 клона по $5.00 | Сейф: $0.00")
+print("[ВЕБ-СТАРТ]: Инициализация геометрических модулей сканирования...")
 
 last_hour_checked = datetime.now(timezone.utc).hour
 round_triggered = False
 
 while True:
-    try:    
+    try:
         _time = bybit_session.get_server_time()
         server_ts = int(_time["result"]["timeSecond"])
         server_dt = datetime.fromtimestamp(server_ts, timezone.utc)
@@ -119,57 +129,51 @@ while True:
     
     # ПОДВЕДЕНИЕ ИТОГОВ РАУНДА И РЕАНИМАЦИЯ НА 01-Й СЕКУНДЕ НОВОГО ЧАСА
     if current_hour != last_hour_checked:
-        LOCAL_STRIKES_CACHE.clear()
         last_hour_checked = current_hour
         round_triggered = False
         
         for ticker in POLYMARKET_TOKENS:
             if ticker in active_positions:
                 pos = active_positions[ticker]
-                yes_p, no_p, live_p, _, success = get_market_data(ticker)
+                direction, body_pct, up_wick_pct, down_wick_pct, live_p, _, success = get_bybit_candle_anatomy(ticker)
                 
                 if success:
-                    actual_winner = "GREEN" if yes_p > 50 else "RED"
-                    is_win = (pos["prediction"] == "🟢  ЗЕЛЕНАЯ" and actual_winner == "GREEN") or \
-                             (pos["prediction"] == "🔴  КРАСНАЯ" and actual_winner == "RED")
+                    # Исходом является реальный цвет финального закрытия часовой свечи Bybit
+                    is_win = (pos["prediction"] == "🟢  ЗЕЛЕНАЯ" and direction == "GREEN") or \
+                             (pos["prediction"] == "🔴  КРАСНАЯ" and direction == "RED")
                     
                     clone = CLONES_MATRIX[ticker]
                     old_circle = clone["circle"]
                     
                     if is_win:
                         verdict = f"🏆 ПОБЕДА КЛОНА {ticker}!"
-                        # КРУГ 1: Выиграл $5 -> получил $10. Переход на Круг 2
                         if old_circle == 1:
                             clone["circle"] = 2
                             clone["last_stake"] = 10.0
                             clone["status"] = "ACTIVE"
-                        # КРУГ 2 (СЕЙФ-РАУНД): Выиграл $10 -> получил $20. Прячем $10 в сейф!
                         elif old_circle == 2:
-                            RESERVE_BANK += 10.0  # Запираем две пятёрки!
+                            BANK_VAULT["RESERVE_BANK"] += 10.0  # Запираем две пятёрки в сейф!
                             clone["circle"] = 3
                             clone["last_stake"] = 10.0
                             clone["status"] = "ACTIVE"
                             send_log(f"🔒 [СЕЙФ ОБНОВЛЕН]: Клон {ticker} закрыл Сейф-Раунд! ДВЕ ПЯТЁРКИ ЗАПЕРТЫ В СЕЙФ!")
-                        # КРУГ 3: Выиграл $10 -> получил $20. Переход на Финальный Круг 4
                         elif old_circle == 3:
                             clone["circle"] = 4
                             clone["last_stake"] = 20.0
                             clone["status"] = "ACTIVE"
-                        # КРУГ 4 (БЕСКОНЕЧНЫЙ БОЙ): Выиграл $20 -> получил $40. Молотит дальше!
                         elif old_circle == 4:
                             clone["circle"] = 4
                             clone["last_stake"] = 20.0
                             clone["status"] = "ACTIVE"
                     else:
                         verdict = f"❌ СЛИВ КЛОНА {ticker}!"
-                        # Любой минус на любом круге полностью обнуляет прогресс до Круга 1
                         clone["circle"] = 1
                         clone["last_stake"] = 5.0
                         clone["status"] = "FROZEN"  # Павший боец ждет маржу из сейфа
                         
                     report = (
-                        f"\n🏁  <b>ВЕРДИКТ РАУНДА ДЛЯ {ticker}</b>\n"
-                        f"📊  Бот предсказывал: {pos['prediction']} | Рынок закрылся: {'🟢  ЗЕЛЕНАЯ' if actual_winner == 'GREEN' else '🔴  КРАСНАЯ'}\n"
+                        f"\n🏁  <b>ВЕРДИКТ ЗАКРЫТИЯ ЧАСА ДЛЯ {ticker}</b>\n"
+                        f"📊  Бот прогнозировал: {pos['prediction']} | График Bybit закрылся: {'🟢  ЗЕЛЕНАЯ СВЕЧА' if direction == 'GREEN' else '🔴  КРАСНАЯ СВЕЧА'}\n"
                         f"🎯  Исход: {verdict}\n"
                         f"📈  Был на круге: {old_circle} -> Перешел на круг: {clone['circle']}\n"
                         f"------------------------------------------------------"
@@ -180,8 +184,8 @@ while True:
         for ticker in POLYMARKET_TOKENS:
             clone = CLONES_MATRIX[ticker]
             if clone["status"] == "FROZEN":
-                if RESERVE_BANK >= 5.0:
-                    RESERVE_BANK -= 5.0
+                if BANK_VAULT["RESERVE_BANK"] >= 5.0:
+                    BANK_VAULT["RESERVE_BANK"] -= 5.0
                     clone["status"] = "ACTIVE"
                     clone["circle"] = 1
                     clone["last_stake"] = 5.0
@@ -194,26 +198,33 @@ while True:
         for ticker in POLYMARKET_TOKENS:
             c = CLONES_MATRIX[ticker]
             status_msg += f"🪙  {ticker} | Статус: {c['status']} | Текущий Круг: {c['circle']} (Лот: {c['last_stake']} USD)\n"
-        status_msg += f"🔒 <b>ОБЩИЙ РЕЗЕРВНЫЙ СЕЙФ:</b> <code>{RESERVE_BANK} USD</code>\n{'='*60}"
+        status_msg += f"🔒 <b>ОБЩИЙ РЕЗЕРВНЫЙ СЕЙФ:</b> <code>{BANK_VAULT['RESERVE_BANK']} USD</code>\n{'='*60}"
         send_log(status_msg)
         
         active_positions.clear()
 
-    # СНАЙПЕРСКИЙ СКАН НА 55-Й МИНУТЕ ЧАСА (Строго внутри золотых сессий)
+    # СНАЙПЕРСКИЙ СКАН ЧИСТОЙ ГЕОМЕТРИИ СВЕЧЕЙ НА 55-Й МИНУТЕ ЧАСА
     if is_active_session and current_min == 55 and not round_triggered:
         for ticker in POLYMARKET_TOKENS:
             clone = CLONES_MATRIX[ticker]
-            
-            # Если клон пал и не реанимирован — он не имеет права заходить в сделку
             if clone["status"] == "FROZEN":
                 continue
                 
-            yes_p, no_p, live_p, _, success = get_market_data(ticker)
+            direction, body_pct, up_wick_pct, down_wick_pct, live_p, _, success = get_bybit_candle_anatomy(ticker)
             if success:
-                # Паттерн Евгения: Ловим аномальный фитиль от плиты (отклонение от 50/50)
                 prediction = None
-                if yes_p <= 35: prediction = "🟢  ЗЕЛЕНАЯ" # Пролив вниз -> заходим лимиткой по 50 на YES
-                elif yes_p >= 65: prediction = "🔴  КРАСНАЯ" # Сквиз вверх -> заходим лимиткой по 50 на NO
+                reasoning = ""
+                
+                # ЧИСТЫЕ ПАТТЕРНЫ ГРАФИКА (Без использования цен 76/24)
+                # Паттерн 1: Длинный фитиль снизу (Пин-бар выкупа от плит)
+                if direction == "RED" and down_wick_pct >= 60:
+                    prediction = "🟢  ЗЕЛЕНАЯ"
+                    reasoning = f"Найдена разворотная свеча! Длина нижнего фитиля составляет {down_wick_pct}% от всей свечи (Тело всего {body_pct}%). Крупные игроки Bybit агрессивно выкупили пролив от лимитных плит. Ожидается мощный разворот и рост в следующем часе!"
+                
+                # Паттерн 2: Длинный фитиль сверху (Пин-бар распродажи китов)
+                elif direction == "GREEN" and up_wick_pct >= 60:
+                    prediction = "🔴  КРАСНАЯ"
+                    reasoning = f"Найдена разворотная свеча! Длина верхнего фитиля составляет {up_wick_pct}% от всей свечи (Тело всего {body_pct}%). Киты встретили цену жесткими лимитными стенами на продажу. Ожидается принудительный разворот рынка вниз!"
                 
                 if prediction:
                     lot_amount = clone["last_stake"]
@@ -223,19 +234,17 @@ while True:
                     }
                     
                     signal_msg = (
-                        f"\n⏱️  <b>СИГНАЛ ОРАКУЛА (55м) | Сессия: {session_name}</b>\n"
-                        f"🪙  Клон: {ticker} вышел на охоту! Bybit-Спот: {live_p}\n"
-                        f"📊  Цена в стакане: YES {yes_p} / NO {no_p}\n"
-                        f"🎯  ПРОГНОЗ ЦВЕТА СЛЕДУЮЩЕЙ СВЕЧИ: {prediction}\n"
-                        f"🎲  Выставляем боевую лимитку по 50% | Размер лота: {lot_amount} USD (Круг {clone['circle']})\n"
+                        f"\n⏱️  <b>СИГНАЛ ОРАКУЛА ГРАФИКА (55м) | Сессия: {session_name}</b>\n"
+                        f"🪙  Клон: {ticker} зафиксировал паттерн! Спот Bybit: {live_p}\n"
+                        f"📐  АНАТОМИЯ СВЕЧИ: Тело: {body_pct}% | Верхний фитиль: {up_wick_pct}% | Нижний фитиль: {down_wick_pct}%\n"
+                        f"🎯  <b>ПРОГНОЗ ЦВЕТА СЛЕДУЮЩЕЙ СВЕЧИ:</b> {prediction}\n"
+                        f"🧠  <b>ОБЪЯСНЕНИЕ РОБОТА:</b> {reasoning}\n"
+                        f"🎲  Выставляем лимитку по 50% | Размер лота: {lot_amount} USD (Круг {clone['circle']})\n"
                         f"------------------------------------------------------"
                     )
                     send_log(signal_msg)
                     round_triggered = True
-                    break # Заходим строго в 1 лучший фитиль часа, чтобы слоты не толкались
-
-    sys.stdout.flush()
-    time.sleep(10)
+                    break # Заходим строго в 1 лучший фитиль часа
 
     sys.stdout.flush()
     time.sleep(10)
