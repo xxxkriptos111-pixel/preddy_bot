@@ -14,13 +14,13 @@ from pybit.unified_trading import HTTP
 bybit_session = HTTP(testnet=False)
 
 # =====================================================================
-# ПАРАМЕТРЫ КАСКАДНОЙ СИСТЕМЫ ЕВГЕНИЯ (4 КЛОНА ПО $5 + ОБЩИЙ СЕЙФ)
+# НАСТРОЙКИ СВЯЗИ И БРОНИРОВАННОГО СЕЙФА (СИСТЕМА BANK_VAULT)
 # =====================================================================
 TG_TOKEN = "8624858759:AAFp59zrzxoLWFy9g_qm05KErycnjXKHlUU"
 TG_CHAT_ID = "@kriptos111"
 
-# Главный Сейф-Общак под отложенные "пятёрки" для реанимации
-RESERVE_BANK = 0.0  
+# ЖЕСТКИЙ ФИКС СИНТАКСИСА: Системный словарь памяти для защиты от SyntaxError
+BANK_VAULT = {"RESERVE_BANK": 0.0}
 
 # Инициализация 4 автономных клонов под каждую монету пула
 CLONES_MATRIX = {
@@ -38,6 +38,7 @@ def send_log(message):
     """СНАЙПЕРСКИЙ САМОПИСЕЦ: Логирование в log.txt, консоль и Telegram"""
     timestamp = datetime.now(timezone(timedelta(hours=10))).strftime("%Y-%m-%d %H:%M:%S")
     clean_msg = message.replace("<b>", "").replace("</b>", "").replace("🟢 ", "").replace("🔴 ", "")
+    clean_msg = clean_msg.replace("<code>", "").replace("</code>", "")
     
     with open("log.txt", "a", encoding="utf-8") as f:
         f.write(f"[{timestamp}] {clean_msg}\n")
@@ -93,6 +94,7 @@ def get_market_data(ticker):
         return 50, 50, 0.0, 0, False
     except:
         return 50, 50, 0.0, 0, False
+
 # =====================================================================
 # ГЛАВНЫЙ БЕСКОНЕЧНЫЙ ЦИКЛ СКАНЕРА: КАСКАДНЫЙ СЕЙФ-МАРТИНГЕЙЛ
 # =====================================================================
@@ -103,10 +105,7 @@ last_hour_checked = datetime.now(timezone.utc).hour
 round_triggered = False
 
 while True:
-    try:
-        # Сразу объявляем глобальный сейф на первой секунде цикла
-        global RESERVE_BANK
-        
+    try:    
         _time = bybit_session.get_server_time()
         server_ts = int(_time["result"]["timeSecond"])
         server_dt = datetime.fromtimestamp(server_ts, timezone.utc)
