@@ -133,7 +133,8 @@ round_triggered = False
 
 while True:
     try:
-        global BANK_VAULT
+        _time = bybit_session.get_server_time()
+        server_ts = int(_time["result"]["timeSecond"])
         _time = bybit_session.get_server_time()
         server_ts = int(_time["result"]["timeSecond"])
         server_dt = datetime.fromtimestamp(server_ts, timezone.utc)
