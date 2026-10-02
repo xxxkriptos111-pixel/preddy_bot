@@ -136,7 +136,7 @@ while True:
                         clone["circle"] = 3
                         clone["last_stake"] = 10.0
                         send_log(f"🔒 [СЕЙФ ОБНОВЛЕН]: Клон {ticker} выполнил Сейф-Раунд! +$10.00 заперто в сейф!")
-                    elif old_circle in:
+                    elif old_circle == 3:
                         clone["circle"] = 4
                         clone["last_stake"] = 20.0
                     clone["status"] = "ACTIVE"
