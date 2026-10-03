@@ -19,7 +19,7 @@ bybit_session = HTTP(testnet=False)
 # =====================================================================
 # НАСТРОЙКИ СВЯЗИ И БРОНИРОВАННОГО СЕЙФА (СИСТЕМА BANK_VAULT)
 # =====================================================================
-TG_TOKEN = "8624858759:AAFp59zrzxoLWFy9g_qm05KErycnjXKHlUU"
+TG_TOKEN = "8624858759:AAFp59zrzxcLWfY9g_qm05KErycnjXKHIUU"
 TG_CHAT_ID = "@kriptos111"
 
 # Системный словарь памяти для защиты от SyntaxError
