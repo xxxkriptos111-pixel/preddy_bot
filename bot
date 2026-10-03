@@ -6,6 +6,9 @@ import sys
 import os
 from datetime import datetime, timezone, timedelta
 
+# ЖЕСТКИЙ ИМПОРТ ДЛЯ БРОНЕБОЙНОЙ СВЯЗИ
+import telebot
+
 # ПОЛНАЯ ОЧИСТКА ПАМЯТИ
 os.environ.pop("http_proxy", None)
 os.environ.pop("https_proxy", None)
@@ -16,7 +19,7 @@ bybit_session = HTTP(testnet=False)
 # =====================================================================
 # НАСТРОЙКИ СВЯЗИ И БРОНИРОВАННОГО СЕЙФА (СИСТЕМА BANK_VAULT)
 # =====================================================================
-TG_TOKEN = "8624858759:AAFp59zrzxcLWfY9g_qm05KErycnjXKHIUU"
+TG_TOKEN = "8624858759:AAFp59zrzxoLWFy9g_qm05KErycnjXKHlUU"
 TG_CHAT_ID = "@kriptos111"
 
 # Системный словарь памяти для защиты от SyntaxError
@@ -34,31 +37,21 @@ LOCAL_STRIKES_CACHE = {}
 active_positions = {}
 
 # Инициализация официального бота через Proxifier
-tg_bot = telebot.TeleBot("8624858759:AAFp59zrzxoLWFy9g_qm05KErycnjXKHlUU")
+tg_bot = telebot.TeleBot(TG_TOKEN)
 
 def send_log(message):
     """БРОНЕБОЙНЫЙ САМОПИСЕЦ TELEBOT: Прямой прорыв логов через обрывы сети"""
     try:
         timestamp = datetime.now(timezone(timedelta(hours=10))).strftime("%Y-%m-%d %H:%M:%S")
-        # Вычищаем HTML для сохранения в Блокнот log.txt на ПК MSI
         clean_msg = message.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "")
         
         with open("log.txt", "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {clean_msg}\n============================================================\n")
             
         print(f"[{timestamp}] {clean_msg}")
-        
-        # Мощный выстрел в канал через официальный метод TeleBot с защитой от сбоев
-        tg_bot.send_message(chat_id="@kriptos111", text=message, parse_mode="HTML", timeout=5)
+        tg_bot.send_message(chat_id=TG_CHAT_ID, text=message, parse_mode="HTML", timeout=5)
     except Exception as e:
-        # Если интернет моргнул, бот не падает, а мягко пишет ошибку в локальную консоль
-        print(f"[{timestamp}] ⚠️  Заминка связи Телеграм (Бот защищен от падения): {e}")
-        
-        url = f"https://telegram.org{TG_TOKEN}/sendMessage"
-        payload = {"chat_id": TG_CHAT_ID, "text": message, "parse_mode": "HTML"}
-        requests.post(url, json=payload, timeout=1.0)
-    except:
-        pass
+        print(f"⚠️  Заминка связи Телеграм (Бот защищен от падения): {e}")
 
 def check_vladivostok_session():
     """ЭШЕЛОН 1: Контроль золотых окон времени Владивостока (GMT+10)"""
