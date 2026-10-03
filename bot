@@ -33,7 +33,6 @@ POLYMARKET_TOKENS = list(CLONES_MATRIX.keys())
 LOCAL_STRIKES_CACHE = {}
 active_positions = {}
 
-def send_log(message):
 # Инициализация официального бота через Proxifier
 tg_bot = telebot.TeleBot("8624858759:AAFp59zrzxoLWFy9g_qm05KErycnjXKHlUU")
 
