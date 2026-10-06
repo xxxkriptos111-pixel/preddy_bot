@@ -1,250 +1,86 @@
 # -*- coding: utf-8 -*-
-import time
-import requests
-import json
-import sys
-import os
-from datetime import datetime, timezone, timedelta
+import asyncio
+from playwright.async_api import async_playwright
 
-# ЖЕСТКИЙ ИМПОРТ ДЛЯ БРОНЕБОЙНОЙ СВЯЗИ
-import telebot
-
-# ПОЛНАЯ ОЧИСТКА ПАМЯТИ
-os.environ.pop("http_proxy", None)
-os.environ.pop("https_proxy", None)
-
-from pybit.unified_trading import HTTP
-bybit_session = HTTP(testnet=False)
-
-# =====================================================================
-# НАСТРОЙКИ СВЯЗИ И БРОНИРОВАННОГО СЕЙФА (СИСТЕМА BANK_VAULT)
-# =====================================================================
-TG_TOKEN = "8624858759:AAFp59zrzxcLWfY9g_qm05KErycnjXKHIUU"
-TG_CHAT_ID = "@kriptos111"
-
-# Системный словарь памяти для защиты от SyntaxError
-BANK_VAULT = {"RESERVE_BANK": 0.0}
-
-CLONES_MATRIX = {
-    "BTC_HOURLY":  {"symbol": "BTCUSDT",  "circle": 1, "status": "ACTIVE", "last_stake": 5.0},
-    "SOL_HOURLY":  {"symbol": "SOLUSDT",  "circle": 1, "status": "ACTIVE", "last_stake": 5.0},
-    "DOGE_HOURLY": {"symbol": "DOGEUSDT", "circle": 1, "status": "ACTIVE", "last_stake": 5.0},
-    "XRP_HOURLY":  {"symbol": "XRPUSDT",  "circle": 1, "status": "ACTIVE", "last_stake": 5.0}
+TOKENS_MAP = {
+    "btc": "Bitcoin",
+    "eth": "Ethereum",
+    "sol": "Solana",
+    "xrp": "XRP",
+    "doge": "Dogecoin"
 }
 
-POLYMARKET_TOKENS = list(CLONES_MATRIX.keys())
-LOCAL_STRIKES_CACHE = {}
-active_positions = {}
-
-# Инициализация официального бота через Proxifier
-tg_bot = telebot.TeleBot(TG_TOKEN)
-
-def send_log(message):
-    """БРОНЕБОЙНЫЙ САМОПИСЕЦ TELEBOT: Прямой прорыв логов через обрывы сети"""
-    try:
-        timestamp = datetime.now(timezone(timedelta(hours=10))).strftime("%Y-%m-%d %H:%M:%S")
-        clean_msg = message.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "")
-        
-        with open("log.txt", "a", encoding="utf-8") as f:
-            f.write(f"[{timestamp}] {clean_msg}\n============================================================\n")
-            
-        print(f"[{timestamp}] {clean_msg}")
-        tg_bot.send_message(chat_id=TG_CHAT_ID, text=message, parse_mode="HTML", timeout=5)
-    except Exception as e:
-        print(f"⚠️  Заминка связи Телеграм (Бот защищен от падения): {e}")
-
-def check_vladivostok_session():
-    """ЭШЕЛОН 1: Контроль золотых окон времени Владивостока (GMT+10)"""
-    vlad_time = datetime.now(timezone(timedelta(hours=10)))
-    total_min = vlad_time.hour * 60 + vlad_time.minute
+async def simulate_preddy_bet(coin, direction):
+    print(f"\n[📝  ТЕСТ НА БУМАГЕ] Симуляция кликера: {coin.upper()} -> {direction.upper()}...")
     
-    if 600 <= total_min <= 1020: return True, "🌅  ASIA_FLAT (Тихий боковик)"
-    if (22 * 60 + 30) <= total_min or total_min <= (0 * 60 + 30): return True, "🇺🇸  РАЗОГРЕВ АМЕРИКИ"
-    if 300 <= total_min <= 420: return True, "🇺🇸  ЗАТИШЬЕ АМЕРИКИ"
-    return False, "SKIP"
-
-def get_bybit_candle_anatomy(ticker):
-    """ОРАКУЛ ГЕОМЕТРИИ ФИТИЛЕЙ: Чтение строго закрытого прошлого часа Bybit"""
-    try:
-        symbol = CLONES_MATRIX[ticker]["symbol"]
-        res = bybit_session.get_kline(category="linear", symbol=symbol, interval="60", limit=3)
-        if "result" in res and "list" in res["result"] and len(res["result"]["list"]) > 1:
-            raw_candles_list = res["result"]["list"]
-            target_candle = raw_candles_list[1] # Строго полностью закрытый прошлый бар
+    async with async_playwright() as p:
+        # Запускаем чистый скрытый браузер без MetaMask
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        
+        try:
+            print("[1/4] Подключение к платформе Preddy...")
+            await page.goto("https://preddy.trade", timeout=30000, wait_until="networkidle")
             
-            open_p  = float(target_candle[1])
-            high_p  = float(target_candle[2])
-            low_p   = float(target_candle[3])
-            close_p = float(target_candle[4])
+            coin_name = TOKENS_MAP.get(coin.lower())
+            print(f"[2/4] Поиск карточки монеты: {coin_name}...")
             
-            total_height = high_p - low_p
-            if total_height == 0: total_height = 0.00001
+            coin_locator = page.locator(f"text={coin_name}").first
+            if await coin_locator.count() == 0:
+                print(f"❌ Ошибка: Монета {coin_name} не найдена на странице!")
+                return
+                
+            await coin_locator.click()
+            await page.wait_for_timeout(4000) # Ожидание прогрузки раунда
+            print(f"🔗  Успешно перешли на страницу {coin_name}. URL: {page.url}")
             
-            if close_p >= open_p:
-                body_size = close_p - open_p
-                upper_wick = high_p - close_p
-                lower_wick = open_p - low_p
-                direction = "GREEN"
+            # ТЕСТ ТАЙМИНГА: Ищем переключатель на СЛЕДУЮЩИЙ часовой раунд
+            print("[3/4] Проверка контроля раундов (Ищем окно Next Round)...")
+            next_round_btn = page.locator("text=Next").or_(page.locator("text=Upcoming")).or_(page.locator("[class*='next']"))
+            
+            if await next_round_btn.count() > 0:
+                print("[🎯 ] Найдена кнопка перехода на СЛЕДУЮЩИЙ раунд!")
+                print("[🔥 ] СВЯЗКА ИСПРАВНА: Алгоритм видит целевой раунд следующего часа!")
             else:
-                body_size = open_p - close_p
-                upper_wick = high_p - open_p
-                lower_wick = close_p - low_p
-                direction = "RED"
+                print("[⚠️ ] Кнопка 'Next' не найдена. Анализируем структуру автоматического переключения...")
+
+            # Шаг 4. Проверяем, видны ли кнопки ставок гостю сайта
+            print("[4/4] Проверка доступности кнопок ставок на сайте...")
+            up_button = page.locator("text=Buy UP").or_(page.locator("button:has-text('UP')")).first
+            down_button = page.locator("text=Buy DOWN").or_(page.locator("button:has-text('DOWN')")).first
+            
+            if (await up_button.is_visible()) and (await down_button.is_visible()):
+                print(f"🏆 ТЕСТ УСПЕШЕН! Кнопки активны. Алгоритм готов выбрать 'Buy {direction.upper()}'!")
+                print(f"📝  Итог: Имитация ставки 1.08 на {coin.upper()} {direction.upper()} зафиксирована в логах бумажного теста.")
+            else:
+                print("❌ Ошибка: Кнопки скрыты интерфейсом сайта (требуется авторизация кошелька).")
                 
-            body_pct = int((body_size / total_height) * 100)
-            up_wick_pct = int((upper_wick / total_height) * 100)
-            down_wick_pct = int((lower_wick / total_height) * 100)
-            
-            _time = bybit_session.get_server_time()
-            current_min = datetime.fromtimestamp(int(_time["result"]["timeSecond"]), timezone.utc).minute
-            
-            return direction, body_pct, up_wick_pct, down_wick_pct, close_p, current_min, True
-        return "NEUTRAL", 0, 0, 0, 0.0, 0, False
-    except:
-        return "NEUTRAL", 0, 0, 0, 0.0, 0, False
-# =====================================================================
-# ГЛАВНЫЙ БЕСКОНЕЧНЫЙ ЦИКЛ СКАНЕРА
-# =====================================================================
-os.system("cls" if os.name == "nt" else "clear")
-send_log("<b>=== ОРАКУЛ ФИТИЛЕЙ ВОЗВРАЩЕН В СТРОЙ ===</b>\nРежим: Каскадная система 4 Клонов\nПул ставок: $5 -> $10 -> $10 -> $20")
+        except Exception as e:
+            print(f"❌ Баг симулятора: {e}")
+        finally:
+            await browser.close()
 
-last_hour_checked = datetime.now(timezone.utc).hour
-round_triggered = False
-
-while True:
-    try:
-        _time = bybit_session.get_server_time()
-        server_ts = int(_time["result"]["timeSecond"])
-        server_dt = datetime.fromtimestamp(server_ts, timezone.utc)
-        current_min = server_dt.minute
-        current_hour = server_dt.hour
-    except:
-        time.sleep(5)
-        continue
-
-    is_active_session, session_name = check_vladivostok_session()
+async def main():
+    print("=== ТЕСТОВЫЙ ПУЛЬТ PREDDY (НА БУМАГЕ) ===")
+    print("Вводите команды вручную. Формат: 'btc up', 'sol down'. Для выхода: 'exit'")
     
-    # ПОДВЕДЕНИЕ ИТОГОВ НА 01-Й СЕКУНДЕ ПОСЛЕ ЧАСОВОГО ОЖИДАНИЯ
-    if current_min == 1 and not round_triggered:
-        positions_to_clear = [t for t, p in active_positions.items() if time.time() >= p["execution_time"]]
-                
-        for ticker in positions_to_clear:
-            pos = active_positions[ticker]
-            direction, body_pct, up_wick_pct, down_wick_pct, close_p, _, success = get_bybit_candle_anatomy(ticker)
+    while True:
+        cmd = await asyncio.to_thread(input, "\n[КОМАНДА]: ")
+        if cmd.strip().lower() == "exit":
+            break
             
-            if success:
-                is_win = (pos["prediction"] == "🟢  ЗЕЛЕНАЯ" and direction == "GREEN") or \
-                         (pos["prediction"] == "🔴  КРАСНАЯ" and direction == "RED")
-                
-                clone = CLONES_MATRIX[ticker]
-                old_circle = clone["circle"]
-                
-                if is_win:
-                    verdict = f"🏆 ПОБЕДА КЛОНА {ticker} ПО ФИТИЛЮ!"
-                    if old_circle == 1:
-                        clone["circle"] = 2
-                        clone["last_stake"] = 10.0
-                    elif old_circle == 2:
-                        BANK_VAULT["RESERVE_BANK"] += 10.0
-                        clone["circle"] = 3
-                        clone["last_stake"] = 10.0
-                        send_log(f"🔒 [СЕЙФ ОБНОВЛЕН]: Клон {ticker} выполнил Сейф-Раунд! +$10.00 заперто в сейф!")
-                    elif old_circle == 3:
-                        clone["circle"] = 4
-                        clone["last_stake"] = 20.0
-                    elif old_circle == 4:
-                        clone["circle"] = 4
-                        clone["last_stake"] = 20.0
-                    clone["status"] = "ACTIVE"
-                else:
-                    verdict = f"❌ СЛИВ КЛОНА {ticker} ПО ФИТИЛЮ!"
-                    clone["circle"] = 1
-                    clone["last_stake"] = 5.0
-                    clone["status"] = "FROZEN"
-                    
-                send_log(f"🏁  <b>ВЕРДИКТ РАУНДА ДЛЯ {ticker}</b>\nПрогноз: {pos['prediction']} | Свеча закрылась: {direction}\nИсход: {verdict}\nКруг: {old_circle} -> {clone['circle']}")
-                del active_positions[ticker]
-                
-        # БЛОК АВТО-РЕАНИМАЦИИ ИЗ СЕЙФА
-        for ticker in POLYMARKET_TOKENS:
-            clone = CLONES_MATRIX[ticker]
-            if clone["status"] == "FROZEN" and BANK_VAULT["RESERVE_BANK"] >= 5.0:
-                BANK_VAULT["RESERVE_BANK"] -= 5.0
-                clone["status"] = "ACTIVE"
-                clone["circle"] = 1
-                clone["last_stake"] = 5.0
-                send_log(f"🦺  [РЕАНИМАЦИЯ]: Клон {ticker} успешно восстановлен из Сейфа на 1-й круг!")
-                    
-        # Итоговая сводка кошелька нового часа
-        status_msg = f"\n📊  <b>СОСТОЯНИЕ АРМИИ КЛОНОВ ПО ФИТИЛЯМ:</b>\n"
-        for ticker in POLYMARKET_TOKENS:
-            c = CLONES_MATRIX[ticker]
-            status_msg += f"🪙  {ticker} | Статус: {c['status']} | Круг: {c['circle']} (Лот: {c['last_stake']} USD)\n"
-        status_msg += f"🔒 <b>ОБЩИЙ РЕЗЕРВНЫЙ СЕЙФ:</b> {BANK_VAULT['RESERVE_BANK']} USD\n{'='*60}"
-        send_log(status_msg)
+        parts = cmd.strip().split()
+        if len(parts) != 2:
+            print("❌ Неверный формат. Пример: sol up")
+            continue
+            
+        coin = parts[0].lower()
+        direction = parts[1].lower()
         
-        round_triggered = True
+        if coin in TOKENS_MAP and direction in ["up", "down"]:
+            await simulate_preddy_bet(coin, direction)
+        else:
+            print("❌ Ошибка: Неверная монета или направление (up/down)!")
 
-    if current_min == 30:
-        round_triggered = False
-
-    # СНАЙПЕРСКИЙ СКАН ЧИСТОЙ ГЕОМЕТРИИ ТЕКУЩЕЙ СВЕЧИ НА 55-Й МИНУТЕ ЧАСА
-    if is_active_session and current_min == 55 and len(active_positions) == 0:
-        for ticker in POLYMARKET_TOKENS:
-            clone = CLONES_MATRIX[ticker]
-            if clone["status"] == "FROZEN":
-                continue
-                
-            try:
-                symbol = CLONES_MATRIX[ticker]["symbol"]
-                res = bybit_session.get_kline(category="linear", symbol=symbol, interval="60", limit=1)
-                if "result" in res and "list" in res["result"] and len(res["result"]["list"]) > 0:
-                    curr_c = res["result"]["list"][0]
-                    c_open, c_high, c_low, c_live = float(curr_c[1]), float(curr_c[2]), float(curr_c[3]), float(curr_c[4])
-                    
-                    t_height = c_high - c_low
-                    if t_height == 0: t_height = 0.00001
-                    
-                    c_direction = "GREEN" if c_live >= c_open else "RED"
-                    u_wick = c_high - (c_live if c_direction == "GREEN" else c_open)
-                    l_wick = (c_open if c_direction == "GREEN" else c_live) - c_low
-                    
-                    up_wick_pct = int((u_wick / t_height) * 100)
-                    down_wick_pct = int((l_wick / t_height) * 100)
-                    body_pct = int((abs(c_live - c_open) / t_height) * 100)
-                    
-                    prediction = None
-                    reasoning = ""
-                    
-                    if c_direction == "RED" and down_wick_pct >= 55:
-                        prediction = "🟢  ЗЕЛЕНАЯ"
-                        reasoning = f"Найден длинный нижний фитиль отката ({down_wick_pct}%). Крупные игроки выкупают пролив. Ждем зеленую свечу на следующий час!"
-                    elif c_direction == "GREEN" and up_wick_pct >= 55:
-                        prediction = "🔴  КРАСНАЯ"
-                        reasoning = f"Найден длинный верхний фитиль распродажи ({up_wick_pct}%). Медведи удерживают плиту. Ждем красную свечу на следующий час!"
-                        
-                    if prediction:
-                        lot_amount = clone["last_stake"]
-                        active_positions[ticker] = {
-                            "prediction": prediction,
-                            "amount": lot_amount,
-                            "execution_time": time.time() + 3720
-                        }
-                        
-                        signal_msg = (
-                            f"\n⏱️  <b>СИГНАЛ ОРАКУЛА ФИТИЛЕЙ (55м) | {session_name}</b>\n"
-                            f"🪙  Монета: {ticker} зафиксировала хвост! Текущий спот: {c_live}\n"
-                            f"📐  ГЕОМЕТРИЯ: Тело: {body_pct}% | Верхний фитиль: {up_wick_pct}% | Нижний фитиль: {down_wick_pct}%\n"
-                            f"🎯  <b>ПРОГНОЗ ЦВЕТА СЛЕДУЮЩЕЙ СВЕЧИ:</b> {prediction}\n"
-                            f"🧠  <b>АНАЛИЗ РОБОТА:</b> {reasoning}\n"
-                            f"🎲  Лот выставлен заранее: {lot_amount} USD (Круг {clone['circle']}). Включаем часовой тайм-аут удержания...\n"
-                            f"------------------------------------------------------"
-                        )
-                        send_log(signal_msg)
-                        # ЖЕСТКИЙ ФИКС ЕВГЕНИЯ: На Азии собираем всё, на агрессивной Америке — строго 1 монета!
-                        if "АМЕРИКИ" in session_name:
-                            break
-            except:
-                pass
-
-    time.sleep(10)
+if __name__ == "__main__":
+    asyncio.run(main())
