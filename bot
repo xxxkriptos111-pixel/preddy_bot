@@ -24,7 +24,7 @@ async def simulate_preddy_bet(coin, direction):
             # Шаг 2. Кликаем по категории Crypto, чтобы раскрыть список монет
             print("[2/4] Переход в раздел макро-категории Crypto...")
             crypto_tab = page.locator("text=Crypto").first
-            await crypto_tab.click()
+            await crypto_tab.click(force=True)
             await page.wait_for_timeout(3000)
             
             # Теперь ищем конкретный тикер (BTC, SOL, XRP)
@@ -36,7 +36,7 @@ async def simulate_preddy_bet(coin, direction):
                 print(f"❌ Ошибка: Кнопка {coin_ticker} не найдена в интерфейсе!")
                 return
                 
-            await coin_locator.click()
+            await coin_locator.click(force=True)
             await page.wait_for_timeout(4000) # Даем загрузиться раундам
             print(f"🔗  Успешно зашли внутрь раундов! Текущий URL: {page.url}")
             
