@@ -14,56 +14,74 @@ async def simulate_preddy_bet(coin, direction):
     print(f"\n[📝  ТЕСТ НА БУМАГЕ] Имитация кликера: {coin.upper()} -> {direction.upper()}...")
     
     async with async_playwright() as p:
+        # УСТАНАВЛИВАЕМ РАЗРЕШЕНИЕ ЭКРАНА FULL HD (1920x1080)
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        page = await browser.new_page(viewport={"width": 1920, "height": 1080})
         
         try:
             print("[1/4] Подключение к главной странице Preddy...")
             await page.goto("https://preddy.trade", timeout=30000, wait_until="networkidle")
-            
-            # Шаг 2. Кликаем по категории Crypto, чтобы раскрыть список монет
-            print("[2/4] Переход в раздел макро-категории Crypto...")
-            crypto_tab = page.locator("text=Crypto").first
-            await crypto_tab.click(force=True)
             await page.wait_for_timeout(3000)
             
-            # Теперь ищем конкретный тикер (BTC, SOL, XRP)
-            coin_ticker = TOKENS_MAP.get(coin.lower())
-            print(f"🔎  Ищем плашку монеты в стакане: {coin_ticker}...")
+            # Шаг 2. Кликаем по категории Crypto через JavaScript (игнорирует viewport!)
+            print("[2/4] Переход в раздел макро-категории Crypto...")
             
-            coin_locator = page.locator(f"text={coin_ticker}").first
-            if await coin_locator.count() == 0:
-                print(f"❌ Ошибка: Кнопка {coin_ticker} не найдена в интерфейсе!")
-                return
-                
-            await coin_locator.click(force=True)
-            await page.wait_for_timeout(4000) # Даем загрузиться раундам
-            print(f"🔗  Успешно зашли внутрь раундов! Текущий URL: {page.url}")
+            # Находим элемент с текстом Crypto и кликаем по нему напрямую через JS-код страницы
+            await page.evaluate("""() => {
+                const elements = Array.from(document.querySelectorAll('span, button, a'));
+                const cryptoEl = elements.find(el => el.textContent.trim() === 'Crypto');
+                if (cryptoEl) cryptoEl.click();
+                else throw new Error('Элемент Crypto не найден в DOM');
+            }""")
+            
+            await page.wait_for_timeout(3000)
+            
+            # Теперь ищем и кликаем конкретный тикер (BTC, SOL, XRP) тоже через JS
+            coin_ticker = TOKENS_MAP.get(coin.lower())
+            print(f"🔎  Ищем и активируем плашку монеты в DOM: {coin_ticker}...")
+            
+            await page.evaluate(f"""() => {{
+                const elements = Array.from(document.querySelectorAll('span, button, a, div'));
+                const coinEl = elements.find(el => el.textContent.trim() === '{coin_ticker}');
+                if (coinEl) coinEl.click();
+                else throw new Error('Тикер {coin_ticker} не найден в DOM');
+            }}""")
+            
+            await page.wait_for_timeout(5000) # Даем загрузиться раундам
+            print(f"🔗  УСПЕХ! Мы пробили интерфейс сайта. Текущий URL: {page.url}")
             
             # Шаг 3. Ищем переключатель на СЛЕДУЮЩИЙ часовой раунд
             print("[3/4] Проверка контроля таймингов (Ищем Next Round)...")
-            next_round_btn = page.locator("text=Next").or_(page.locator("text=Upcoming")).first
             
-            if await next_round_btn.count() > 0:
-                print("[🎯 ] Найдена кнопка перехода на СЛЕДУЮЩИЙ раунд! Имитируем клик...")
-                await next_round_btn.click()
+            # Кликаем на кнопку Next/Upcoming через JS
+            next_clicked = await page.evaluate("""() => {
+                const elements = Array.from(document.querySelectorAll('button, span, div'));
+                const nextEl = elements.find(el => el.textContent.trim() === 'Next' || el.textContent.trim() === 'Upcoming');
+                if (nextEl) {
+                    nextEl.click();
+                    return true;
+                }
+                return false;
+            }""")
+            
+            if next_clicked:
+                print("[🔥 ] СВЯЗКА ИСПРАВНА: Переключились на раунд следующего часа!")
                 await page.wait_for_timeout(2000)
-                print("[🔥 ] СВЯЗКА ИСПРАВНА: Выбран раунд следующего часа!")
             else:
                 print("[⚠️ ] Кнопка 'Next' не найдена. Возможно, интерфейс отображает раунды списком.")
 
-            # Шаг 4. Проверяем доступность кнопок для гостя
+            # Шаг 4. Анализируем доступность кнопок
             print("[4/4] Анализ доступности интерфейса ставок...")
             up_button = page.locator("text=Buy UP").or_(page.locator("button:has-text('UP')")).first
             down_button = page.locator("text=Buy DOWN").or_(page.locator("button:has-text('DOWN')")).first
             
             if (await up_button.is_visible()) and (await down_button.is_visible()):
-                print(f"🏆 ТЕСТ НА БУМАГЕ ПРОЙДЕН! Кнопки активны. Скрипт готов выбрать 'Buy {direction.upper()}'!")
+                print(f"🏆 ТЕСТ НА БУМАГЕ ПОЛНОСТЬЮ ПРОЙДЕН! Скрипт готов выбрать 'Buy {direction.upper()}'!")
             else:
-                print("❌ Ошибка интерфейса: Кнопки ставок скрыты (требуется подключение MetaMask).")
+                print("❌ Ошибка интерфейса: Кнопки ставок скрыты (требуется подключение кошелька).")
                 
         except Exception as e:
-            print(f"❌ Баг симулятора: {e}")
+            print(f"❌ Критический баг симулятора: {e}")
         finally:
             await browser.close()
 
