@@ -3,57 +3,64 @@ import asyncio
 from playwright.async_api import async_playwright
 
 TOKENS_MAP = {
-    "btc": "Bitcoin",
-    "eth": "Ethereum",
-    "sol": "Solana",
+    "btc": "BTC",
+    "eth": "ETH",
+    "sol": "SOL",
     "xrp": "XRP",
-    "doge": "Dogecoin"
+    "doge": "DOGE"
 }
 
 async def simulate_preddy_bet(coin, direction):
-    print(f"\n[📝  ТЕСТ НА БУМАГЕ] Симуляция кликера: {coin.upper()} -> {direction.upper()}...")
+    print(f"\n[📝  ТЕСТ НА БУМАГЕ] Имитация кликера: {coin.upper()} -> {direction.upper()}...")
     
     async with async_playwright() as p:
-        # Запускаем чистый скрытый браузер без MetaMask
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         
         try:
-            print("[1/4] Подключение к платформе Preddy...")
+            print("[1/4] Подключение к главной странице Preddy...")
             await page.goto("https://preddy.trade", timeout=30000, wait_until="networkidle")
             
-            coin_name = TOKENS_MAP.get(coin.lower())
-            print(f"[2/4] Поиск карточки монеты: {coin_name}...")
+            # Шаг 2. Кликаем по категории Crypto, чтобы раскрыть список монет
+            print("[2/4] Переход в раздел макро-категории Crypto...")
+            crypto_tab = page.locator("text=Crypto").first
+            await crypto_tab.click()
+            await page.wait_for_timeout(3000)
             
-            coin_locator = page.locator(f"text={coin_name}").first
+            # Теперь ищем конкретный тикер (BTC, SOL, XRP)
+            coin_ticker = TOKENS_MAP.get(coin.lower())
+            print(f"🔎  Ищем плашку монеты в стакане: {coin_ticker}...")
+            
+            coin_locator = page.locator(f"text={coin_ticker}").first
             if await coin_locator.count() == 0:
-                print(f"❌ Ошибка: Монета {coin_name} не найдена на странице!")
+                print(f"❌ Ошибка: Кнопка {coin_ticker} не найдена в интерфейсе!")
                 return
                 
             await coin_locator.click()
-            await page.wait_for_timeout(4000) # Ожидание прогрузки раунда
-            print(f"🔗  Успешно перешли на страницу {coin_name}. URL: {page.url}")
+            await page.wait_for_timeout(4000) # Даем загрузиться раундам
+            print(f"🔗  Успешно зашли внутрь раундов! Текущий URL: {page.url}")
             
-            # ТЕСТ ТАЙМИНГА: Ищем переключатель на СЛЕДУЮЩИЙ часовой раунд
-            print("[3/4] Проверка контроля раундов (Ищем окно Next Round)...")
-            next_round_btn = page.locator("text=Next").or_(page.locator("text=Upcoming")).or_(page.locator("[class*='next']"))
+            # Шаг 3. Ищем переключатель на СЛЕДУЮЩИЙ часовой раунд
+            print("[3/4] Проверка контроля таймингов (Ищем Next Round)...")
+            next_round_btn = page.locator("text=Next").or_(page.locator("text=Upcoming")).first
             
             if await next_round_btn.count() > 0:
-                print("[🎯 ] Найдена кнопка перехода на СЛЕДУЮЩИЙ раунд!")
-                print("[🔥 ] СВЯЗКА ИСПРАВНА: Алгоритм видит целевой раунд следующего часа!")
+                print("[🎯 ] Найдена кнопка перехода на СЛЕДУЮЩИЙ раунд! Имитируем клик...")
+                await next_round_btn.click()
+                await page.wait_for_timeout(2000)
+                print("[🔥 ] СВЯЗКА ИСПРАВНА: Выбран раунд следующего часа!")
             else:
-                print("[⚠️ ] Кнопка 'Next' не найдена. Анализируем структуру автоматического переключения...")
+                print("[⚠️ ] Кнопка 'Next' не найдена. Возможно, интерфейс отображает раунды списком.")
 
-            # Шаг 4. Проверяем, видны ли кнопки ставок гостю сайта
-            print("[4/4] Проверка доступности кнопок ставок на сайте...")
+            # Шаг 4. Проверяем доступность кнопок для гостя
+            print("[4/4] Анализ доступности интерфейса ставок...")
             up_button = page.locator("text=Buy UP").or_(page.locator("button:has-text('UP')")).first
             down_button = page.locator("text=Buy DOWN").or_(page.locator("button:has-text('DOWN')")).first
             
             if (await up_button.is_visible()) and (await down_button.is_visible()):
-                print(f"🏆 ТЕСТ УСПЕШЕН! Кнопки активны. Алгоритм готов выбрать 'Buy {direction.upper()}'!")
-                print(f"📝  Итог: Имитация ставки 1.08 на {coin.upper()} {direction.upper()} зафиксирована в логах бумажного теста.")
+                print(f"🏆 ТЕСТ НА БУМАГЕ ПРОЙДЕН! Кнопки активны. Скрипт готов выбрать 'Buy {direction.upper()}'!")
             else:
-                print("❌ Ошибка: Кнопки скрыты интерфейсом сайта (требуется авторизация кошелька).")
+                print("❌ Ошибка интерфейса: Кнопки ставок скрыты (требуется подключение MetaMask).")
                 
         except Exception as e:
             print(f"❌ Баг симулятора: {e}")
@@ -80,7 +87,7 @@ async def main():
         if coin in TOKENS_MAP and direction in ["up", "down"]:
             await simulate_preddy_bet(coin, direction)
         else:
-            print("❌ Ошибка: Неверная монета или направление (up/down)!")
+            print("❌ Ошибка: Неверная монета или направление!")
 
 if __name__ == "__main__":
     asyncio.run(main())
